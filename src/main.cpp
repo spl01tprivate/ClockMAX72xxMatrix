@@ -25,6 +25,7 @@
 #define intensity_rx_topic "d1m_003/intensity"
 #define daylightsaving_rx_topic "d1m_003/daylightsaving"
 #define lightstate_rx_topic "d1m_003/lightstaterx"
+#define power_rx_topic "d1m_003/power"
 
 // GPIOs
 #define touchPin 12 // D6
@@ -52,6 +53,8 @@ bool displayWIFIdsctnd = false;
 bool touchInput = false;
 bool contentTimeDate = true;
 bool lightStateMQTT = false;
+bool powerState = true;
+unsigned int lm_intensity = 0;
 
 // ***** OBJECTS *****
 // Network
@@ -93,7 +96,7 @@ void initServices();
 void setup_wifi();
 void callback(char *, byte *, unsigned int);
 void checkMQTT();
-void printTime();
+void printTime(bool);
 void updateHandler();
 void signalConnectionsMatrix();
 void readInput();
@@ -111,6 +114,14 @@ void onStationConnected(const WiFiEventStationModeConnected &evt)
   mx.setPoint(7, matPtrWIFI, false);
   initServices();
   lastReadSecond = timeClient.getSeconds();
+  String text = "MQTT";
+  if (!client.connected())
+  {
+    for (unsigned int i = 0; i < text.length(); i++)
+    {
+      mx.setChar((i * COL_SIZE) + COL_SIZE - 3, text[3 - i]);
+    }
+  }
 }
 
 // ***** SETUP *****
@@ -130,7 +141,7 @@ void setup()
   // Display
   mx.begin();
   mx.clear();
-  intensity(0);
+  intensity(lm_intensity);
   // mx.transform(MD_MAX72XX::TINV);
 
   // Networking
@@ -147,7 +158,7 @@ void loop()
 {
   readInput();
 
-  printTime();
+  printTime(false);
 
   signalConnectionsMatrix();
 
@@ -213,9 +224,9 @@ void readInput()
   }
 }
 
-void printTime()
+void printTime(bool forceDraw)
 {
-  if (((firstRead || timeClient.getSeconds() == lastReadSecond) && WiFi.status() == WL_CONNECTED && contentTimeDate) || (!contentTimeDate && !touchInput))
+  if ((((forceDraw || firstRead || timeClient.getSeconds() == lastReadSecond) && WiFi.status() == WL_CONNECTED && contentTimeDate) || (!contentTimeDate && !touchInput)) && powerState)
   {
     lastReadSecond = timeClient.getSeconds();
     if (lastReadSecond == 59)
@@ -241,7 +252,7 @@ void printTime()
     Serial.println(timeClient.getSeconds());
     Serial.println();
 
-    if ((firstRead || minutesBefore != String(timeClient.getMinutes())) || (!contentTimeDate && !touchInput))
+    if ((forceDraw || firstRead || minutesBefore != String(timeClient.getMinutes())) || (!contentTimeDate && !touchInput))
     {
       contentTimeDate = true;
 
@@ -271,6 +282,11 @@ void printTime()
       displayText(hours + minutes);
       displayWIFIdsctnd = false;
     }
+  }
+  else if ((WiFi.status() == WL_CONNECTED && contentTimeDate && !powerState) || (WiFi.status() == WL_CONNECTED && !digitalRead(touchPin) && !powerState))
+  {
+    intensity(0);
+    mx.clear();
   }
 }
 
@@ -337,7 +353,8 @@ void callback(char *topic, byte *message, unsigned int length)
   // Check whether Message is subscribed
   if (String(topic) == intensity_rx_topic) // subscribed topic defined in header ! Topic subscription is done in the reconnect() Function below !
   {
-    intensity(atoi(messageTemp.c_str()));
+    lm_intensity = atoi(messageTemp.c_str());
+    intensity(lm_intensity);
     Serial.println("\n[MQTT] Intensity was set to " + String(messageTemp) + "!");
   }
   else if (String(topic) == daylightsaving_rx_topic) // subscribed topic defined in header ! Topic subscription is done in the reconnect() Function below !
@@ -354,8 +371,7 @@ void callback(char *topic, byte *message, unsigned int length)
     }
     EEPROM.write(0, daylightsaving ? 1 : 0);
     EEPROM.commit();
-    firstRead = true;
-    printTime();
+    printTime(true);
   }
   else if (String(topic) == lightstate_rx_topic)
   {
@@ -365,6 +381,20 @@ void callback(char *topic, byte *message, unsigned int length)
       lightStateMQTT = true;
 
     Serial.println("\n[MQTT] Light state: " + String(messageTemp));
+  }
+  else if (String(topic) == power_rx_topic)
+  {
+    if (messageTemp == "off")
+    {
+      powerState = false;
+    }
+    else if (messageTemp == "on")
+    {
+      powerState = true;
+      intensity(lm_intensity);
+      printTime(true);
+    }
+    Serial.println("\n[MQTT] Power State: " + String(messageTemp));
   }
   else
   {
@@ -414,6 +444,7 @@ void checkMQTT()
     client.subscribe(intensity_rx_topic);
     client.subscribe(daylightsaving_rx_topic);
     client.subscribe(lightstate_rx_topic);
+    client.subscribe(power_rx_topic);
     client.publish(status_topic, "d1m_003 active as ledmatrix");
     if (matPtrMQTT == 0)
       matPtrMQTT = 7;
