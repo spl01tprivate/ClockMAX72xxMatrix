@@ -10,12 +10,12 @@
 #include <EEPROM.h>
 
 // ***** DEFINES *****
-#define wifi_ssid "SploitNetwork"
-#define wifi_password "19_bennO_network"
+#define wifi_ssid "XXXXXXXXXXXXXXXXXX"
+#define wifi_password "XXXXXXXXXXXXXXXXX"
 
 #define mqtt_server "192.168.0.2"
-#define mqtt_user "Sploit"
-#define mqtt_password "hassio_home"
+#define mqtt_user "XXXXXXXXXXX"
+#define mqtt_password "XXXXXXXXXXXXX"
 
 // TX
 #define status_topic "d1m_003/status"
