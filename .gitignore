@@ -6,6 +6,8 @@ bin-release/
 
 # Other files and folders
 .settings/
+.pio/
+.vscode
 
 # Executables
 *.swf
